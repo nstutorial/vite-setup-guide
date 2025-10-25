@@ -35,6 +35,7 @@ interface Mahajan {
   phone: string | null;
   address: string | null;
   payment_day: string | null;
+  advance_payment?: number;
 }
 
 interface Bill {
@@ -78,6 +79,9 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
   const [selectedBillId, setSelectedBillId] = useState('');
   const [loading, setLoading] = useState(false);
   const [addBillDialogOpen, setAddBillDialogOpen] = useState(false);
+  const [mahajanData, setMahajanData] = useState<Mahajan>(mahajan);
+  const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
+  const [advanceAdjustAmount, setAdvanceAdjustAmount] = useState('');
 
   const [paymentData, setPaymentData] = useState({
     amount: '',
@@ -104,6 +108,17 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
   const fetchBillsAndTransactions = async () => {
     try {
       setLoading(true);
+      
+      // Fetch mahajan data with advance_payment
+      const { data: mahajanInfo, error: mahajanError } = await supabase
+        .from('mahajans')
+        .select('*')
+        .eq('id', mahajan.id)
+        .single();
+
+      if (mahajanError) throw mahajanError;
+      setMahajanData(mahajanInfo);
+
       const { data: billsData, error: billsError } = await supabase
         .from('bills')
         .select('*')
@@ -256,10 +271,26 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
 
       if (error) throw error;
 
-      toast({
-        title: 'Payment recorded',
-        description: `Payment of ${formatCurrency(paymentAmount)} has been distributed across bills`,
-      });
+      // If there's remaining payment (overpayment), store it as advance
+      if (remainingPayment > 0) {
+        const currentAdvance = mahajanData.advance_payment || 0;
+        const { error: advanceError } = await supabase
+          .from('mahajans')
+          .update({ advance_payment: currentAdvance + remainingPayment })
+          .eq('id', mahajan.id);
+
+        if (advanceError) throw advanceError;
+
+        toast({
+          title: 'Payment recorded',
+          description: `Payment of ${formatCurrency(paymentAmount)} recorded. ${formatCurrency(remainingPayment)} added as advance payment.`,
+        });
+      } else {
+        toast({
+          title: 'Payment recorded',
+          description: `Payment of ${formatCurrency(paymentAmount)} has been distributed across bills`,
+        });
+      }
 
       setPaymentData({
         amount: '',
@@ -277,6 +308,56 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to record payment',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdvanceAdjustment = async () => {
+    const amount = parseFloat(advanceAdjustAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Amount',
+        description: 'Please enter a valid amount',
+      });
+      return;
+    }
+
+    const currentAdvance = mahajanData.advance_payment || 0;
+    if (amount > currentAdvance) {
+      toast({
+        variant: 'destructive',
+        title: 'Insufficient Advance',
+        description: 'Adjustment amount exceeds available advance',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('mahajans')
+        .update({ advance_payment: currentAdvance - amount })
+        .eq('id', mahajan.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Advance adjusted',
+        description: `${formatCurrency(amount)} deducted from advance payment`,
+      });
+
+      setShowAdvanceDialog(false);
+      setAdvanceAdjustAmount('');
+      fetchBillsAndTransactions();
+    } catch (error) {
+      console.error('Error adjusting advance:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to adjust advance payment',
       });
     } finally {
       setLoading(false);
@@ -321,7 +402,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Bills</CardTitle>
@@ -344,6 +425,24 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{formatCurrency(calculateTotalOutstanding())}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Advance Payment</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(mahajanData.advance_payment || 0)}</div>
+            {(mahajanData.advance_payment || 0) > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 w-full"
+                onClick={() => setShowAdvanceDialog(true)}
+              >
+                Adjust Advance
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -457,7 +556,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
                 {formatCurrency(calculateTotalOutstanding())}
               </div>
               <p className="text-sm text-muted-foreground">
-                Payment will be applied to bills sequentially (oldest first), clearing interest before principal
+                Payment will be applied to bills sequentially (oldest first), clearing interest before principal. Any overpayment will be stored as advance payment.
               </p>
             </div>
 
@@ -530,6 +629,62 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
           if (onUpdate) onUpdate();
         }}
       />
+
+      {/* Advance Adjustment Dialog */}
+      <Dialog open={showAdvanceDialog} onOpenChange={setShowAdvanceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adjust Advance Payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Advance</Label>
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(mahajanData.advance_payment || 0)}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Deduct amount from advance payment. This can be useful for manual adjustments.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="adjust_amount">Deduction Amount</Label>
+              <Input
+                id="adjust_amount"
+                type="number"
+                step="0.01"
+                placeholder="Enter amount to deduct"
+                value={advanceAdjustAmount}
+                onChange={(e) => setAdvanceAdjustAmount(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowAdvanceDialog(false);
+                  setAdvanceAdjustAmount('');
+                }}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={handleAdvanceAdjustment}
+                disabled={loading}
+              >
+                {loading ? 'Adjusting...' : 'Adjust'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
