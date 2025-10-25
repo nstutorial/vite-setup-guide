@@ -1,73 +1,85 @@
-# Welcome to your Lovable project
+# Create Vite Application - Step by Step
 
-## Project info
+## Prerequisites
+- Node.js (version 18 or higher)
+- npm or yarn or pnpm
 
-**URL**: https://lovable.dev/projects/ac85da0a-4c39-4675-8d56-4e5a5bd143ef
+## Step-by-Step Commands
 
-## How can I edit this code?
+### 1. Create a new Vite project
+```bash
+npm create vite@latest
+```
 
-There are several ways of editing your application.
+### 2. Follow the prompts
+- Enter your project name
+- Select a framework (React, Vue, Svelte, etc.)
+- Select a variant (TypeScript, JavaScript, etc.)
 
-**Use Lovable**
+### 3. Navigate to your project directory
+```bash
+cd your-project-name
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ac85da0a-4c39-4675-8d56-4e5a5bd143ef) and start prompting.
+### 4. Install dependencies
+```bash
+npm install
+```
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 5. Start the development server
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### 6. Build for production
+```bash
+npm run build
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 7. Preview production build
+```bash
+npm run preview
+```
 
-**Use GitHub Codespaces**
+## Alternative: Create with specific template
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### React + TypeScript
+```bash
+npm create vite@latest my-app -- --template react-ts
+cd my-app
+npm install
+npm run dev
+```
 
-## What technologies are used for this project?
+### React + JavaScript
+```bash
+npm create vite@latest my-app -- --template react
+cd my-app
+npm install
+npm run dev
+```
 
-This project is built with:
+### Vue + TypeScript
+```bash
+npm create vite@latest my-app -- --template vue-ts
+cd my-app
+npm install
+npm run dev
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Using other package managers
 
-## How can I deploy this project?
+### With Yarn
+```bash
+yarn create vite
+```
 
-Simply open [Lovable](https://lovable.dev/projects/ac85da0a-4c39-4675-8d56-4e5a5bd143ef) and click on Share -> Publish.
+### With PNPM
+```bash
+pnpm create vite
+```
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### With Bun
+```bash
+bun create vite
+```
