@@ -94,46 +94,12 @@ const AddBillDialog: React.FC<AddBillDialogProps> = ({ open, onOpenChange, mahaj
 
     setLoading(true);
     try {
-      // Check for advance payment
-      const { data: mahajanData, error: mahajanError } = await supabase
-        .from('mahajans')
-        .select('advance_payment')
-        .eq('id', mahajanId)
-        .single();
-
-      if (mahajanError) throw mahajanError;
-
-      let billAmount = parseFloat(formData.billAmount);
-      const advancePayment = mahajanData.advance_payment || 0;
-      let advanceUsed = 0;
-
-      // Auto-adjust advance payment if available
-      if (advancePayment > 0) {
-        if (advancePayment >= billAmount) {
-          // Advance covers entire bill
-          advanceUsed = billAmount;
-          billAmount = 0;
-        } else {
-          // Partial advance coverage
-          advanceUsed = advancePayment;
-          billAmount = billAmount - advancePayment;
-        }
-
-        // Update advance payment
-        const { error: updateError } = await supabase
-          .from('mahajans')
-          .update({ advance_payment: advancePayment - advanceUsed })
-          .eq('id', mahajanId);
-
-        if (updateError) throw updateError;
-      }
-
       const { error } = await supabase
         .from('bills')
         .insert({
           user_id: user.id,
           mahajan_id: mahajanId,
-          bill_amount: billAmount,
+          bill_amount: parseFloat(formData.billAmount),
           description: formData.description,
           interest_rate: formData.interestType === 'none' ? 0 : parseFloat(formData.interestRate),
           interest_type: formData.interestType,
@@ -143,13 +109,9 @@ const AddBillDialog: React.FC<AddBillDialogProps> = ({ open, onOpenChange, mahaj
 
       if (error) throw error;
 
-      const message = advanceUsed > 0 
-        ? `Bill added successfully. ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(advanceUsed)} advance payment applied.`
-        : "The bill has been successfully added.";
-
       toast({
         title: "Bill added",
-        description: message,
+        description: "The bill has been successfully added.",
       });
 
       setFormData({
