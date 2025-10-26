@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AddPartnerDialog } from '@/components/AddPartnerDialog';
@@ -16,6 +17,7 @@ interface Partner {
 }
 
 export default function Partners() {
+  const navigate = useNavigate();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -43,6 +45,15 @@ export default function Partners() {
 
   return (
     <div className="container mx-auto p-6">
+      <Button 
+        variant="ghost" 
+        onClick={() => navigate('/')}
+        className="mb-4"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Dashboard
+      </Button>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Partners / Investors</h1>
         <Button onClick={() => setShowAddDialog(true)}>
