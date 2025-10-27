@@ -96,6 +96,79 @@ export function RecordPartnerPaymentDialog({
         if (updateError) throw updateError;
       }
 
+      // Handle mahajan payment: reduce outstanding bills or add to advance payment
+      const { data: activeBills } = await supabase
+        .from('bills')
+        .select('id, bill_amount')
+        .eq('mahajan_id', mahajanId)
+        .eq('is_active', true)
+        .order('bill_date', { ascending: true });
+
+      let remainingAmount = amountNum;
+
+      // First, try to pay off active bills
+      if (activeBills && activeBills.length > 0) {
+        for (const bill of activeBills) {
+          if (remainingAmount <= 0) break;
+
+          // Get total paid for this bill
+          const { data: transactions } = await supabase
+            .from('bill_transactions')
+            .select('amount')
+            .eq('bill_id', bill.id);
+
+          const totalPaid = transactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+          const billOutstanding = bill.bill_amount - totalPaid;
+
+          if (billOutstanding > 0) {
+            const paymentForBill = Math.min(remainingAmount, billOutstanding);
+            
+            // Map payment mode to enum values (cash or bank)
+            const billPaymentMode = paymentMode === 'cash' ? 'cash' : 'bank';
+            
+            // Record bill transaction
+            const { error: billTxError } = await supabase
+              .from('bill_transactions')
+              .insert({
+                bill_id: bill.id,
+                amount: paymentForBill,
+                transaction_type: 'principal',
+                payment_date: paymentDate,
+                payment_mode: billPaymentMode,
+                notes: `Payment from partner${notes ? ': ' + notes : ''}`,
+              });
+
+            if (billTxError) throw billTxError;
+
+            remainingAmount -= paymentForBill;
+
+            // Mark bill as inactive if fully paid
+            if (paymentForBill >= billOutstanding) {
+              await supabase
+                .from('bills')
+                .update({ is_active: false })
+                .eq('id', bill.id);
+            }
+          }
+        }
+      }
+
+      // If there's remaining amount, add to mahajan's advance payment
+      if (remainingAmount > 0) {
+        const { data: mahajan } = await supabase
+          .from('mahajans')
+          .select('advance_payment')
+          .eq('id', mahajanId)
+          .single();
+
+        if (mahajan) {
+          await supabase
+            .from('mahajans')
+            .update({ advance_payment: (mahajan.advance_payment || 0) + remainingAmount })
+            .eq('id', mahajanId);
+        }
+      }
+
       toast.success('Payment recorded successfully');
       setMahajanId('');
       setAmount('');

@@ -392,7 +392,15 @@ export type Database = {
           payment_date?: string
           payment_mode?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "partner_transactions_mahajan_id_fkey"
+            columns: ["mahajan_id"]
+            isOneToOne: false
+            referencedRelation: "mahajans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       partners: {
         Row: {
