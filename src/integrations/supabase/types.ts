@@ -400,6 +400,13 @@ export type Database = {
             referencedRelation: "mahajans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "partner_transactions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
         ]
       }
       partners: {

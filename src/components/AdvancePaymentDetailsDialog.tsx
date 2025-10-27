@@ -21,7 +21,7 @@ interface PartnerTransaction {
   notes: string | null;
   partner: {
     name: string;
-  };
+  } | null;
 }
 
 export function AdvancePaymentDetailsDialog({
@@ -57,7 +57,11 @@ export function AdvancePaymentDetailsDialog({
         .order('payment_date', { ascending: false });
 
       if (error) throw error;
-      setTransactions(data || []);
+      // Filter out transactions without partner data and type cast
+      const validTransactions = (data || []).filter(
+        (t): t is PartnerTransaction => t.partner !== null
+      );
+      setTransactions(validTransactions);
     } catch (error: any) {
       console.error('Error fetching partner transactions:', error);
       toast({
@@ -115,7 +119,7 @@ export function AdvancePaymentDetailsDialog({
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-primary" />
                           <span className="font-medium">
-                            {transaction.partner.name}
+                            {transaction.partner?.name || 'Unknown Partner'}
                           </span>
                         </div>
                         
