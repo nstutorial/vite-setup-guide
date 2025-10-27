@@ -6,14 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AddBillCustomerDialog } from './AddBillCustomerDialog';
 import { EditBillCustomerDialog } from './EditBillCustomerDialog';
 import { AddSaleDialog } from './AddSaleDialog';
 import { RecordSalePaymentDialog } from './RecordSalePaymentDialog';
-import { Plus, Search, Edit, Phone, Mail, MapPin, DollarSign, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit, Phone, Mail, MapPin, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 interface BillCustomer {
   id: string;
@@ -36,18 +34,6 @@ interface SaleTransaction {
   sale_id: string;
   amount: number;
   transaction_type: string;
-  payment_date: string;
-  payment_mode: string;
-  notes: string | null;
-}
-
-interface Sale {
-  id: string;
-  sale_number: string;
-  sale_amount: number;
-  sale_date: string;
-  is_active: boolean;
-  description: string | null;
 }
 
 export function BillCustomersList() {
@@ -63,10 +49,6 @@ export function BillCustomersList() {
   const [selectedCustomer, setSelectedCustomer] = useState<BillCustomer | null>(null);
   const [loading, setLoading] = useState(true);
   const [allTransactions, setAllTransactions] = useState<SaleTransaction[]>([]);
-  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
-  const [customerSales, setCustomerSales] = useState<Sale[]>([]);
-  const [customerTransactions, setCustomerTransactions] = useState<SaleTransaction[]>([]);
-  const [loadingStatement, setLoadingStatement] = useState(false);
 
   const fetchCustomers = async () => {
     if (!user) return;
@@ -163,101 +145,6 @@ export function BillCustomersList() {
     }, 0);
   };
 
-  const fetchCustomerStatement = async (customerId: string) => {
-    setLoadingStatement(true);
-    try {
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('bill_customer_id', customerId)
-        .order('sale_date', { ascending: false });
-
-      if (salesError) throw salesError;
-
-      if (salesData && salesData.length > 0) {
-        const saleIds = salesData.map(s => s.id);
-        const { data: transData, error: transError } = await supabase
-          .from('sale_transactions')
-          .select('*')
-          .in('sale_id', saleIds)
-          .order('payment_date', { ascending: false });
-
-        if (transError) throw transError;
-        setCustomerTransactions(transData || []);
-      } else {
-        setCustomerTransactions([]);
-      }
-
-      setCustomerSales(salesData || []);
-    } catch (error: any) {
-      console.error('Error fetching customer statement:', error);
-      toast.error('Failed to load customer statement');
-    } finally {
-      setLoadingStatement(false);
-    }
-  };
-
-  const toggleCustomerExpand = async (customerId: string) => {
-    if (expandedCustomerId === customerId) {
-      setExpandedCustomerId(null);
-    } else {
-      setExpandedCustomerId(customerId);
-      await fetchCustomerStatement(customerId);
-    }
-  };
-
-  const handleDeleteSale = async (saleId: string) => {
-    if (!controlSettings.allowDelete) return;
-    
-    if (!confirm('Are you sure you want to delete this sale? This will also delete all related transactions.')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('sales')
-        .delete()
-        .eq('id', saleId);
-
-      if (error) throw error;
-
-      toast.success('Sale deleted successfully');
-      if (expandedCustomerId) {
-        await fetchCustomerStatement(expandedCustomerId);
-      }
-      await fetchCustomers();
-    } catch (error: any) {
-      console.error('Error deleting sale:', error);
-      toast.error('Failed to delete sale');
-    }
-  };
-
-  const handleDeleteTransaction = async (transactionId: string) => {
-    if (!controlSettings.allowDelete) return;
-    
-    if (!confirm('Are you sure you want to delete this transaction?')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('sale_transactions')
-        .delete()
-        .eq('id', transactionId);
-
-      if (error) throw error;
-
-      toast.success('Transaction deleted successfully');
-      if (expandedCustomerId) {
-        await fetchCustomerStatement(expandedCustomerId);
-      }
-      await fetchCustomers();
-    } catch (error: any) {
-      console.error('Error deleting transaction:', error);
-      toast.error('Failed to delete transaction');
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -305,196 +192,68 @@ export function BillCustomersList() {
               <TableBody>
                 {filteredCustomers.map((customer) => {
                   const outstandingBalance = calculateCustomerOutstanding(customer);
-                  const isExpanded = expandedCustomerId === customer.id;
                   
                   return (
-                    <Collapsible key={customer.id} open={isExpanded} onOpenChange={() => toggleCustomerExpand(customer.id)}>
-                      <TableRow>
-                        <TableCell>
-                          <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm" className="font-medium hover:underline p-0 h-auto">
-                              {customer.name}
-                              {isExpanded ? (
-                                <ChevronUp className="ml-2 h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="ml-2 h-4 w-4" />
-                              )}
-                            </Button>
-                          </CollapsibleTrigger>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1 text-sm">
-                            {customer.phone && (
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {customer.phone}
-                              </div>
-                            )}
-                            {customer.email && (
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {customer.email}
-                              </div>
-                            )}
-                            {customer.address && (
-                              <div className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {customer.address}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{customer.gst_number || '-'}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          ₹{outstandingBalance.toFixed(2)}
-                        </TableCell>
+                    <TableRow key={customer.id}>
+                      <TableCell className="font-medium">{customer.name}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1 text-sm">
+                          {customer.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {customer.phone}
+                            </div>
+                          )}
+                          {customer.email && (
+                            <div className="flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {customer.email}
+                            </div>
+                          )}
+                          {customer.address && (
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {customer.address}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{customer.gst_number || '-'}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        ₹{outstandingBalance.toFixed(2)}
+                      </TableCell>
 
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRecordPayment(customer)}
+                            title="Record Payment"
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddSale(customer)}
+                            title="Add Sale"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          {controlSettings.allowEdit && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRecordPayment(customer)}
-                              title="Record Payment"
+                              onClick={() => handleEdit(customer)}
+                              title="Edit Customer"
                             >
-                              <DollarSign className="h-4 w-4" />
+                              <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleAddSale(customer)}
-                              title="Add Sale"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                            {controlSettings.allowEdit && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(customer)}
-                                title="Edit Customer"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      
-                      <CollapsibleContent asChild>
-                        <TableRow>
-                          <TableCell colSpan={5} className="bg-muted/30 p-6">
-                            {loadingStatement ? (
-                              <div className="text-center py-4">Loading statement...</div>
-                            ) : (
-                              <div className="space-y-6">
-                                {/* Sales Section */}
-                                <div>
-                                  <h3 className="text-lg font-semibold mb-3">Sales</h3>
-                                  {customerSales.length === 0 ? (
-                                    <p className="text-muted-foreground">No sales recorded</p>
-                                  ) : (
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Sale #</TableHead>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Description</TableHead>
-                                          <TableHead className="text-right">Amount</TableHead>
-                                          <TableHead>Status</TableHead>
-                                          <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {customerSales.map((sale) => (
-                                          <TableRow key={sale.id}>
-                                            <TableCell className="font-mono">{sale.sale_number}</TableCell>
-                                            <TableCell>{format(new Date(sale.sale_date), 'dd MMM yyyy')}</TableCell>
-                                            <TableCell>{sale.description || '-'}</TableCell>
-                                            <TableCell className="text-right">₹{Number(sale.sale_amount).toFixed(2)}</TableCell>
-                                            <TableCell>
-                                              <span className={`px-2 py-1 rounded text-xs ${
-                                                sale.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                              }`}>
-                                                {sale.is_active ? 'Active' : 'Closed'}
-                                              </span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                              {controlSettings.allowDelete && (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => handleDeleteSale(sale.id)}
-                                                  title="Delete Sale"
-                                                >
-                                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                              )}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  )}
-                                </div>
-
-                                {/* Transactions Section */}
-                                <div>
-                                  <h3 className="text-lg font-semibold mb-3">Transactions</h3>
-                                  {customerTransactions.length === 0 ? (
-                                    <p className="text-muted-foreground">No transactions recorded</p>
-                                  ) : (
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Type</TableHead>
-                                          <TableHead>Payment Mode</TableHead>
-                                          <TableHead className="text-right">Amount</TableHead>
-                                          <TableHead>Notes</TableHead>
-                                          <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {customerTransactions.map((transaction) => (
-                                          <TableRow key={transaction.id}>
-                                            <TableCell>{format(new Date(transaction.payment_date), 'dd MMM yyyy')}</TableCell>
-                                            <TableCell>
-                                              <span className={`px-2 py-1 rounded text-xs ${
-                                                transaction.transaction_type === 'payment' 
-                                                  ? 'bg-blue-100 text-blue-800' 
-                                                  : 'bg-orange-100 text-orange-800'
-                                              }`}>
-                                                {transaction.transaction_type}
-                                              </span>
-                                            </TableCell>
-                                            <TableCell className="capitalize">{transaction.payment_mode}</TableCell>
-                                            <TableCell className="text-right">₹{Number(transaction.amount).toFixed(2)}</TableCell>
-                                            <TableCell>{transaction.notes || '-'}</TableCell>
-                                            <TableCell className="text-right">
-                                              {controlSettings.allowDelete && (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                                  title="Delete Transaction"
-                                                >
-                                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                              )}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      </CollapsibleContent>
-                    </Collapsible>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
