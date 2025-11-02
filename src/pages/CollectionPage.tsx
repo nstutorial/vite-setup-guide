@@ -174,9 +174,7 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
   const calculateCustomerOutstanding = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      const balance = calculateLoanBalance(customer.id, loan.id);
-      const interest = calculateInterest(loan, balance);
-      return sum + balance + interest;
+      return sum + (loan.total_outstanding || 0);
     }, 0);
   };
 
