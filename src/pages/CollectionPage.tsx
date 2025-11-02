@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import CustomerDetails from '@/components/CustomerDetails';
 import { 
   Select,
   SelectContent,
@@ -76,6 +77,7 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
   const [showPaymentForm, setShowPaymentForm] = useState<{[key: string]: boolean}>({});
   const [paymentErrors, setPaymentErrors] = useState<{[key: string]: string}>({});
   const [confirmedTransactions, setConfirmedTransactions] = useState<{[key: string]: boolean}>({});
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const dayLabels = {
     sunday: 'Sunday',
@@ -356,6 +358,19 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
 
   const filteredCustomers = activeTab === 'scheduled' ? getScheduledCustomers() : getTodayCollectedCustomers();
 
+  // If a customer is selected, show their details
+  if (selectedCustomer) {
+    return (
+      <CustomerDetails
+        customer={selectedCustomer}
+        onBack={() => {
+          setSelectedCustomer(null);
+          fetchCustomers(); // Refresh data when coming back
+        }}
+      />
+    );
+  }
+
   const handlePayment = async (customer: Customer) => {
     if (!user) return;
     
@@ -419,8 +434,10 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
       // Switch to collected tab to show the payment
       setActiveTab('collected');
 
-      // Refresh data
-      fetchCustomers();
+      // Refresh data with a small delay to ensure database triggers complete
+      setTimeout(() => {
+        fetchCustomers();
+      }, 300);
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({
@@ -693,9 +710,11 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
         description,
       });
 
-      // Refresh data
-      fetchCustomers();
-      cancelEditingPayment(customerId, paymentId);
+      // Refresh data with a small delay to ensure database triggers complete
+      setTimeout(() => {
+        fetchCustomers();
+        cancelEditingPayment(customerId, paymentId);
+      }, 300);
     } catch (error) {
       console.error('Error updating payment:', error);
       toast({
@@ -1804,8 +1823,9 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => navigate(`/customers/${customer.id}`)}
+                                onClick={() => setSelectedCustomer(customer)}
                                 className="flex-shrink-0"
+                                title="View customer details"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -2057,8 +2077,9 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => navigate(`/customers/${customer.id}`)}
+                              onClick={() => setSelectedCustomer(customer)}
                               className="flex-shrink-0"
+                              title="View customer details"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
