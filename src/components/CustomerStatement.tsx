@@ -25,6 +25,8 @@ interface Loan {
   id: string;
   loan_number: string;
   principal_amount: number;
+  processing_fee?: number;
+  total_outstanding?: number;
   interest_rate: number | null;
   interest_type: string | null;
   loan_date: string;
@@ -39,7 +41,7 @@ interface LoanTransaction {
   amount: number;
   payment_date: string;
   transaction_type: string;
-  payment_mode: string;
+  payment_mode: 'cash' | 'bank';
   notes: string | null;
   loan: {
     loan_number: string;
@@ -110,7 +112,7 @@ const CustomerStatement: React.FC<CustomerStatementProps> = ({ customer }) => {
           .order('payment_date', { ascending: true });
 
         if (transactionsError) throw transactionsError;
-        setTransactions(transactionsData || []);
+        setTransactions((transactionsData || []) as any);
       } else {
         setTransactions([]);
       }
@@ -141,11 +143,12 @@ const CustomerStatement: React.FC<CustomerStatementProps> = ({ customer }) => {
                        (!endDate || loanDate <= new Date(endDate));
 
       if (isInRange) {
+        const loanAmount = loan.total_outstanding || loan.principal_amount;
         allEntries.push({
           date: loan.loan_date,
-           description: `Loan - ${loan.description}`,
+           description: `Loan - ${loan.description}${loan.processing_fee ? ` (Inc. Processing Fee: ₹${loan.processing_fee.toFixed(2)})` : ''}`,
           reference: loan.loan_number,
-          debit: loan.principal_amount,
+          debit: loanAmount,
           credit: 0,
           balance: 0, // Will be calculated after sorting
           type: 'loan_disbursement'

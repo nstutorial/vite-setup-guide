@@ -33,6 +33,8 @@ interface Customer {
   loans?: Array<{
     id: string;
     principal_amount: number;
+    processing_fee?: number;
+    total_outstanding?: number;
     is_active: boolean;
     interest_rate: number;
     interest_type: string;
@@ -99,7 +101,7 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
         .from('customers')
         .select(`
           *,
-          loans:loans(id, principal_amount, is_active, interest_rate, interest_type, loan_date)
+          loans:loans(id, principal_amount, processing_fee, total_outstanding, is_active, interest_rate, interest_type, loan_date)
         `)
         .eq('user_id', user?.id)
         .order('name');

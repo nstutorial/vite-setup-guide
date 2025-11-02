@@ -60,6 +60,7 @@ interface BillTransaction {
   bill: {
     description: string | null;
     bill_amount: number;
+    bill_number: string | null;
   };
 }
 
@@ -75,6 +76,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
   const { toast } = useToast();
   const [bills, setBills] = useState<Bill[]>([]);
   const [transactions, setTransactions] = useState<BillTransaction[]>([]);
+  const [firmTransactions, setFirmTransactions] = useState<any[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -111,6 +113,31 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
     return () => window.removeEventListener('refresh-mahajans', handleRefresh);
   }, [user, mahajan.id]);
 
+  // Realtime subscriptions for firm transaction updates
+  useEffect(() => {
+    if (!mahajan.id) return;
+
+    const firmTransactionsChannel = supabase
+      .channel('mahajan-detail-firm-transactions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'firm_transactions',
+          filter: `mahajan_id=eq.${mahajan.id}`
+        },
+        () => {
+          fetchBillsAndTransactions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(firmTransactionsChannel);
+    };
+  }, [mahajan.id]);
+
   const fetchBillsAndTransactions = async () => {
     try {
       setLoading(true);
@@ -138,7 +165,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
       if (billsData && billsData.length > 0) {
         const { data: transactions, error: transError } = await supabase
           .from('bill_transactions')
-          .select(`*, bill:bills(description, bill_amount)`)
+          .select(`*, bill:bills(description, bill_amount, bill_number)`)
           .in('bill_id', billsData.map(b => b.id))
           .order('payment_date', { ascending: false });
 
@@ -146,8 +173,18 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
         transData = transactions || [];
       }
 
-      // Set both states together to prevent flickering
+      // Fetch firm transactions for this mahajan
+      const { data: firmTransData, error: firmTransError } = await supabase
+        .from('firm_transactions')
+        .select('*')
+        .eq('mahajan_id', mahajan.id)
+        .order('transaction_date', { ascending: false });
+
+      if (firmTransError) throw firmTransError;
+
+      // Set all states together to prevent flickering
       setTransactions(transData);
+      setFirmTransactions(firmTransData || []);
       setBills(billsData || []);
     } catch (error: any) {
       console.error('Error fetching bills and transactions:', error);
@@ -191,11 +228,18 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
   };
 
   const calculateTotalOutstanding = () => {
-    return bills.reduce((sum, bill) => {
+    const billsTotal = bills.reduce((sum, bill) => {
       const balance = calculateBillBalance(bill.id);
       const interest = calculateInterest(bill, balance);
       return sum + balance + interest;
     }, 0);
+
+    // Calculate total firm transactions (payments) for this mahajan
+    const firmPayments = firmTransactions.reduce((sum, ft) => sum + Number(ft.amount), 0);
+
+    // Subtract both advance payment and firm payments from outstanding
+    const advancePayment = mahajanData.advance_payment || 0;
+    return billsTotal - advancePayment - firmPayments;
   };
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
@@ -214,6 +258,9 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
 
     setLoading(true);
     try {
+      // Generate 8-digit reference number
+      const referenceNumber = Math.floor(10000000 + Math.random() * 90000000).toString();
+      
       // Get all active bills sorted by bill_date (oldest first)
       const activeBills = bills
         .filter(b => b.is_active)
@@ -250,7 +297,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
             transaction_type: 'interest',
             payment_mode: paymentData.payment_mode,
             payment_date: paymentData.payment_date,
-            notes: paymentData.notes || null,
+            notes: `REF#${referenceNumber}${paymentData.notes ? ' - ' + paymentData.notes : ''}`,
           });
           remainingPayment -= interestPayment;
         }
@@ -264,7 +311,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
             transaction_type: 'principal',
             payment_mode: paymentData.payment_mode,
             payment_date: paymentData.payment_date,
-            notes: paymentData.notes || null,
+            notes: `REF#${referenceNumber}${paymentData.notes ? ' - ' + paymentData.notes : ''}`,
           });
           remainingPayment -= principalPayment;
         }
@@ -472,10 +519,12 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
               <Plus className="h-4 w-4 mr-2" />
               Add Bill
             </Button>
-            <Button onClick={() => setShowPaymentDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Record Payment
-            </Button>
+            {controlSettings.allowRecordPayment && (
+              <Button onClick={() => setShowPaymentDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -587,7 +636,7 @@ const MahajanDetails: React.FC<MahajanDetailsProps> = ({ mahajan, onBack, onUpda
                               </div>
                             )}
                           </div>
-                          {controlSettings.allowBillManagement && bill.is_active && (
+                          {controlSettings.allowBillManagement && controlSettings.allowRecordPayment && bill.is_active && (
                             <Button
                               variant="outline"
                               size="sm"

@@ -47,6 +47,14 @@ interface BillTransaction {
   };
 }
 
+interface FirmTransaction {
+  id: string;
+  amount: number;
+  transaction_date: string;
+  transaction_type: string;
+  description: string | null;
+}
+
 interface StatementEntry {
   date: string;
   description: string;
@@ -54,7 +62,7 @@ interface StatementEntry {
   debit: number;
   credit: number;
   balance: number;
-  type: 'bill_disbursement' | 'payment_paid' | 'interest_accrued';
+  type: 'bill_disbursement' | 'payment_paid' | 'interest_accrued' | 'firm_payment';
 }
 
 interface MahajanStatementProps {
@@ -66,6 +74,7 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
   const { toast } = useToast();
   const [bills, setBills] = useState<Bill[]>([]);
   const [transactions, setTransactions] = useState<BillTransaction[]>([]);
+  const [firmTransactions, setFirmTransactions] = useState<FirmTransaction[]>([]);
   const [statement, setStatement] = useState<StatementEntry[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -78,10 +87,51 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
   }, [user, mahajan.id]);
 
   useEffect(() => {
-    if (bills.length > 0) {
+    if (bills.length > 0 || firmTransactions.length > 0) {
       generateStatement();
     }
-  }, [bills, transactions, startDate, endDate]);
+  }, [bills, transactions, firmTransactions, startDate, endDate]);
+
+  // Realtime subscriptions for partner transaction updates
+  useEffect(() => {
+    if (!mahajan.id) return;
+
+    const partnerTransactionsChannel = supabase
+      .channel('mahajan-partner-transactions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'partner_transactions',
+          filter: `mahajan_id=eq.${mahajan.id}`
+        },
+        () => {
+          fetchMahajanData();
+        }
+      )
+      .subscribe();
+
+    const billTransactionsChannel = supabase
+      .channel('mahajan-bill-transactions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bill_transactions'
+        },
+        () => {
+          fetchMahajanData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(partnerTransactionsChannel);
+      supabase.removeChannel(billTransactionsChannel);
+    };
+  }, [mahajan.id]);
 
   const fetchMahajanData = async () => {
     try {
@@ -96,6 +146,15 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
         .order('bill_date', { ascending: false });
 
       if (billsError) throw billsError;
+
+      // Fetch firm transactions for this mahajan
+      const { data: firmTransData, error: firmTransError } = await supabase
+        .from('firm_transactions')
+        .select('*')
+        .eq('mahajan_id', mahajan.id)
+        .order('transaction_date', { ascending: true });
+
+      if (firmTransError) throw firmTransError;
 
       let transactionsData: BillTransaction[] = [];
 
@@ -114,9 +173,10 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
         transactionsData = transData || [];
       }
 
-      // Update both states together after all data is fetched
+      // Update all states together after all data is fetched
       setTransactions(transactionsData);
       setBills(billsData || []);
+      setFirmTransactions(firmTransData || []);
 
     } catch (error) {
       console.error('Error fetching mahajan data:', error);
@@ -156,30 +216,84 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
       }
     });
 
-    // Add payments paid
+    // Group transactions by date and payment mode
+    const transactionsByDate = new Map<string, BillTransaction[]>();
+    
     transactions.forEach(transaction => {
       const paymentDate = new Date(transaction.payment_date);
       const isInRange = (!startDate || paymentDate >= new Date(startDate)) && 
                        (!endDate || paymentDate <= new Date(endDate));
 
       if (isInRange) {
-        // Extract partner name from notes if present
-        let partnerInfo = '';
-        if (transaction.notes && transaction.notes.includes('Payment from partner:')) {
-          const partnerMatch = transaction.notes.match(/Payment from partner: ([^-]+)/);
-          if (partnerMatch) {
-            partnerInfo = ` [Partner: ${partnerMatch[1].trim()}]`;
-          }
+        const key = `${transaction.payment_date}-${transaction.transaction_type}-${transaction.payment_mode}`;
+        if (!transactionsByDate.has(key)) {
+          transactionsByDate.set(key, []);
         }
+        transactionsByDate.get(key)!.push(transaction);
+      }
+    });
 
+    // Create consolidated payment entries
+    transactionsByDate.forEach((groupedTransactions, key) => {
+      const firstTransaction = groupedTransactions[0];
+      const totalAmount = groupedTransactions.reduce((sum, t) => sum + t.amount, 0);
+      
+      // Extract reference number from notes
+      let referenceNumber = '';
+      if (firstTransaction.notes) {
+        const refMatch = firstTransaction.notes.match(/REF#(\d{8})/);
+        if (refMatch) {
+          referenceNumber = refMatch[1];
+        }
+      }
+      
+      // Build description with all bill details
+      let description = `Payment Received`;
+      
+      // Extract partner info if present
+      let partnerInfo = '';
+      if (firstTransaction.notes && firstTransaction.notes.includes('Payment from partner:')) {
+        const partnerMatch = firstTransaction.notes.match(/Payment from partner: ([^-]+)/);
+        if (partnerMatch) {
+          partnerInfo = ` from ${partnerMatch[1].trim()}`;
+        }
+      }
+      
+      description += partnerInfo;
+      
+      // Add bill details
+      const billDetails = groupedTransactions.map(t => 
+        `₹${t.amount.toFixed(2)} for payment of ${t.bill.bill_number}`
+      ).join('\n');
+      
+      description += '\n' + billDetails;
+
+      allEntries.push({
+        date: firstTransaction.payment_date,
+        description: description,
+        reference: referenceNumber || 'N/A',
+        debit: 0,
+        credit: totalAmount,
+        balance: 0, // Will be calculated after sorting
+        type: 'payment_paid'
+      });
+    });
+
+    // Add firm transactions
+    firmTransactions.forEach(firmTrans => {
+      const transDate = new Date(firmTrans.transaction_date);
+      const isInRange = (!startDate || transDate >= new Date(startDate)) && 
+                       (!endDate || transDate <= new Date(endDate));
+
+      if (isInRange) {
         allEntries.push({
-          date: transaction.payment_date,
-          description: `Paid - ${transaction.bill.description || 'Bill'} (${transaction.bill.bill_number}) - ${transaction.transaction_type} via ${transaction.payment_mode}${partnerInfo}${transaction.notes && !transaction.notes.includes('Payment from partner:') ? ' - ' + transaction.notes : ''}`,
-          reference: transaction.id,
+          date: firmTrans.transaction_date,
+          description: `Firm Payment - ${firmTrans.description || 'Payment from firm account'}`,
+          reference: 'FIRM',
           debit: 0,
-          credit: transaction.amount,
+          credit: firmTrans.amount,
           balance: 0, // Will be calculated after sorting
-          type: 'payment_paid'
+          type: 'firm_payment'
         });
       }
     });
@@ -192,7 +306,7 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
       if (entry.type === 'bill_disbursement') {
         entry.balance = runningBalance + entry.debit;
         runningBalance += entry.debit;
-      } else if (entry.type === 'payment_paid') {
+      } else if (entry.type === 'payment_paid' || entry.type === 'firm_payment') {
         entry.balance = runningBalance - entry.credit;
         runningBalance -= entry.credit;
       }
@@ -237,6 +351,12 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
       const interest = calculateInterest(bill, balance);
       return sum + balance + interest;
     }, 0);
+  };
+
+  const calculateStatementOutstanding = () => {
+    const totalDebits = statement.reduce((sum, entry) => sum + entry.debit, 0);
+    const totalCredits = statement.reduce((sum, entry) => sum + entry.credit, 0);
+    return totalDebits - totalCredits;
   };
 
   const formatCurrency = (amount: number) => {
@@ -389,12 +509,22 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
       doc.text("Account Summary", margin, y); 
       y += 15;
   
+      const totalDebits = statement.reduce((sum, entry) => sum + entry.debit, 0);
+      const totalCredits = statement.reduce((sum, entry) => sum + entry.credit, 0);
+      const outstandingBalance = totalDebits - totalCredits;
+  
       doc.setFillColor(249, 249, 249);
-      doc.rect(margin, y - 5, tableWidth, 20, "F");
+      doc.rect(margin, y - 5, tableWidth, 30, "F");
   
       doc.setFontSize(10).setFont("helvetica", "normal");
-      doc.text(`Total Outstanding Balance: ${formatCurrency(calculateTotalOutstanding()).replace("₹", "")}`, margin + 5, y);
+      doc.text(`Total Debits: ${formatCurrency(totalDebits).replace("₹", "")}`, margin + 5, y);
       y += 6;
+      doc.text(`Total Credits: ${formatCurrency(totalCredits).replace("₹", "")}`, margin + 5, y);
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.text(`Outstanding Balance: ${formatCurrency(outstandingBalance).replace("₹", "")}`, margin + 5, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
       doc.text(`Total Transactions: ${statement.length}`, margin + 5, y);
   
       // ---------------- FOOTER ---------------- 
@@ -463,18 +593,28 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{bills.length}</div>
-              <div className="text-sm text-blue-600">Total Bills</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <div className="text-2xl font-bold text-red-600">
+                {formatCurrency(statement.reduce((sum, entry) => sum + entry.debit, 0))}
+              </div>
+              <div className="text-sm text-red-600">Total Debits</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{transactions.length}</div>
-              <div className="text-sm text-green-600">Total Payments</div>
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(statement.reduce((sum, entry) => sum + entry.credit, 0))}
+              </div>
+              <div className="text-sm text-green-600">Total Credits</div>
             </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{formatCurrency(calculateTotalOutstanding())}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {formatCurrency(calculateStatementOutstanding())}
+              </div>
               <div className="text-sm text-orange-600">Outstanding Balance</div>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{statement.length}</div>
+              <div className="text-sm text-blue-600">Total Entries</div>
             </div>
           </div>
         </CardContent>
@@ -507,30 +647,32 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
                       <td className="p-3 text-sm">{format(new Date(entry.date), 'dd/MM/yyyy')}</td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
-                          <span>{entry.description}</span>
+                          <span className="whitespace-pre-line">{entry.description}</span>
                           <Badge 
-                            variant={
+                             variant={
                               entry.type === 'bill_disbursement' ? 'destructive' :
-                              entry.type === 'payment_paid' ? 'default' : 'secondary'
+                              entry.type === 'payment_paid' ? 'default' :
+                              entry.type === 'firm_payment' ? 'secondary' : 'secondary'
                             }
                             className="text-xs"
                           >
                             {entry.type === 'bill_disbursement' ? 'Bill' :
-                             entry.type === 'payment_paid' ? 'Payment' : 'Interest'}
+                             entry.type === 'payment_paid' ? 'Payment' :
+                             entry.type === 'firm_payment' ? 'Firm Payment' : 'Interest'}
                           </Badge>
                         </div>
                       </td>
                       <td className="p-3 text-sm text-gray-600">{entry.reference}</td>
                       <td className="p-3 text-right">
-                        {entry.credit > 0 ? (
-                          <span className="text-red-600 font-medium">{formatCurrency(entry.credit)}</span>
+                        {entry.debit > 0 ? (
+                          <span className="text-red-600 font-medium">{formatCurrency(entry.debit)}</span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
                       <td className="p-3 text-right">
-                        {entry.debit > 0 ? (
-                          <span className="text-green-600 font-medium">{formatCurrency(entry.debit)}</span>
+                        {entry.credit > 0 ? (
+                          <span className="text-green-600 font-medium">{formatCurrency(entry.credit)}</span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
@@ -539,6 +681,20 @@ const MahajanStatement: React.FC<MahajanStatementProps> = ({ mahajan }) => {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-muted/50 font-bold border-t-2">
+                  <tr>
+                    <td colSpan={3} className="p-3 text-right">Total:</td>
+                    <td className="p-3 text-right text-red-600">
+                      {formatCurrency(statement.reduce((sum, entry) => sum + entry.debit, 0))}
+                    </td>
+                    <td className="p-3 text-right text-green-600">
+                      {formatCurrency(statement.reduce((sum, entry) => sum + entry.credit, 0))}
+                    </td>
+                    <td className="p-3 text-right text-orange-600">
+                      {formatCurrency(calculateStatementOutstanding())}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ) : (
