@@ -39,6 +39,7 @@ interface Customer {
     interest_rate: number;
     interest_type: string;
     loan_date: string;
+    emi_amount?: number;
   }>;
 }
 
@@ -101,7 +102,7 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
         .from('customers')
         .select(`
           *,
-          loans:loans(id, principal_amount, processing_fee, total_outstanding, is_active, interest_rate, interest_type, loan_date)
+          loans:loans(id, principal_amount, processing_fee, total_outstanding, is_active, interest_rate, interest_type, loan_date, emi_amount)
         `)
         .eq('user_id', user?.id)
         .order('name');
@@ -181,11 +182,7 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
   const calculateCustomerEMIAmount = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      // Calculate EMI based on principal amount and interest rate
-      // For now, using a simple calculation - you can adjust this logic
-      const monthlyRate = loan.interest_type === 'monthly' ? loan.interest_rate / 100 : 0;
-      const emiAmount = monthlyRate > 0 ? loan.principal_amount * monthlyRate : loan.principal_amount * 0.05; // 5% default
-      return sum + emiAmount;
+      return sum + ((loan as any).emi_amount || 0);
     }, 0);
   };
 

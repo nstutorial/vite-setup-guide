@@ -20,6 +20,7 @@ interface Customer {
     principal_amount: number;
     is_active: boolean;
     emi_amount?: number;
+    total_outstanding?: number;
   }>;
 }
 
@@ -80,7 +81,7 @@ const DaywisePayment: React.FC<DaywisePaymentProps> = ({ onUpdate }) => {
         .from('customers')
         .select(`
           *,
-          loans:loans(id, principal_amount, is_active, interest_rate, interest_type, loan_date, emi_amount)
+          loans:loans(id, principal_amount, is_active, interest_rate, interest_type, loan_date, emi_amount, total_outstanding)
         `)
         .eq('user_id', user?.id)
         .order('name');
@@ -144,9 +145,7 @@ const DaywisePayment: React.FC<DaywisePaymentProps> = ({ onUpdate }) => {
   const calculateCustomerOutstanding = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      const balance = calculateLoanBalance(customer.id, loan.id);
-      const interest = calculateInterest(loan, balance);
-      return sum + balance + interest;
+      return sum + ((loan as any).total_outstanding || 0);
     }, 0);
   };
 
