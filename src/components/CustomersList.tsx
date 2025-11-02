@@ -78,7 +78,7 @@ const CustomersList = ({ onUpdate }: CustomersListProps) => {
         .from('customers')
         .select(`
           *,
-          loans (id, principal_amount, processing_fee, total_outstanding, is_active, interest_rate, interest_type, loan_date)
+          loans (id, principal_amount, processing_fee, total_outstanding, is_active, interest_rate, interest_type, loan_date, emi_amount)
         `)
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
