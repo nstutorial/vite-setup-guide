@@ -934,7 +934,6 @@ Generated on: ${new Date().toLocaleDateString()}
                   <SelectValue placeholder="Select account (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   {firmAccounts.map((account) => (
                     <SelectItem key={account.id} value={account.id}>
                       {account.account_name}
