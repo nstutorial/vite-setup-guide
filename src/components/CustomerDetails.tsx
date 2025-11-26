@@ -153,6 +153,9 @@ const CustomerDetails: React.FC<CustomerDetailsProps> = ({ customer, onBack }) =
         description: "The payment has been successfully recorded.",
       });
 
+      // Dispatch event to refresh daywise payment schedule
+      window.dispatchEvent(new CustomEvent('payment-recorded'));
+
       setPaymentData({
         amount: '',
         paymentType: 'principal',
@@ -178,7 +181,8 @@ const CustomerDetails: React.FC<CustomerDetailsProps> = ({ customer, onBack }) =
   const calculateLoanBalance = (loan: Loan) => {
     const loanTransactions = transactions.filter(t => t.loan_id === loan.id);
     const totalPaid = loanTransactions.reduce((sum, t) => sum + t.amount, 0);
-    return loan.principal_amount - totalPaid;
+    const initialOutstanding = loan.total_outstanding || loan.principal_amount;
+    return initialOutstanding - totalPaid;
   };
 
   const calculateInterest = (loan: Loan, balance: number) => {

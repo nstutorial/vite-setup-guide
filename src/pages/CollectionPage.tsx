@@ -177,14 +177,25 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
   const calculateCustomerOutstanding = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      return sum + (loan.total_outstanding || 0);
+      // Get initial total outstanding
+      const initialOutstanding = loan.total_outstanding || 0;
+      
+      // Calculate total payments made for this loan
+      const loanPayments = allTransactions.filter(t => t.loan_id === loan.id);
+      const totalPaid = loanPayments.reduce((paymentSum, payment) => paymentSum + payment.amount, 0);
+      
+      // Current outstanding = initial outstanding - total paid
+      const currentOutstanding = initialOutstanding - totalPaid;
+      
+      return sum + Math.max(0, currentOutstanding); // Ensure it doesn't go negative
     }, 0);
   };
 
   const calculateCustomerEMIAmount = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      return sum + ((loan as any).emi_amount || 0);
+      const emiAmount = parseFloat(((loan as any).emi_amount || 0).toString());
+      return sum + (isNaN(emiAmount) ? 0 : emiAmount);
     }, 0);
   };
 
@@ -1812,11 +1823,9 @@ const CollectionPage = ({ selectedDay }: CollectionPageProps) => {
                               <p className="text-sm font-medium text-green-600 truncate">
                                 Outstanding: {formatCurrency(outstandingBalance)}
                               </p>
-                              {emiAmount > 0 && (
-                                <p className="text-sm font-medium text-purple-600 truncate">
-                                  EMI: {formatCurrency(emiAmount)}
-                                </p>
-                              )}
+                              <p className="text-sm font-semibold text-purple-700 truncate bg-purple-50 px-2 py-1 rounded">
+                                EMI: {formatCurrency(emiAmount)}
+                              </p>
                             </div>
                             
                             <div className="flex gap-2 flex-wrap">

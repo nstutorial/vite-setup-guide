@@ -68,9 +68,21 @@ const DaywisePayment: React.FC<DaywisePaymentProps> = ({ onUpdate }) => {
       fetchCustomers();
     };
 
+    const handlePaymentRecorded = () => {
+      fetchCustomers();
+      if (onUpdate) onUpdate();
+    };
+
     window.addEventListener('customer-added', handleCustomerAdded);
-    return () => window.removeEventListener('customer-added', handleCustomerAdded);
-  }, []);
+    window.addEventListener('payment-recorded', handlePaymentRecorded);
+    window.addEventListener('refresh-customers', handleCustomerAdded);
+    
+    return () => {
+      window.removeEventListener('customer-added', handleCustomerAdded);
+      window.removeEventListener('payment-recorded', handlePaymentRecorded);
+      window.removeEventListener('refresh-customers', handleCustomerAdded);
+    };
+  }, [onUpdate]);
 
   const fetchCustomers = async () => {
     try {
@@ -145,7 +157,17 @@ const DaywisePayment: React.FC<DaywisePaymentProps> = ({ onUpdate }) => {
   const calculateCustomerOutstanding = (customer: Customer) => {
     const activeLoans = customer.loans?.filter(loan => loan.is_active) || [];
     return activeLoans.reduce((sum, loan) => {
-      return sum + ((loan as any).total_outstanding || 0);
+      // Get initial total outstanding
+      const initialOutstanding = (loan as any).total_outstanding || 0;
+      
+      // Calculate total payments made for this loan
+      const loanPayments = allTransactions.filter(t => t.loan_id === loan.id);
+      const totalPaid = loanPayments.reduce((paymentSum, payment) => paymentSum + payment.amount, 0);
+      
+      // Current outstanding = initial outstanding - total paid
+      const currentOutstanding = initialOutstanding - totalPaid;
+      
+      return sum + Math.max(0, currentOutstanding);
     }, 0);
   };
 

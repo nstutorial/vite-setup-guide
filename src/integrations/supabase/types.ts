@@ -14,6 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
+      admission_enquiry: {
+        Row: {
+          address: string | null
+          age: number | null
+          child_name: string
+          course_name: string | null
+          created_at: string
+          date_of_birth: string | null
+          enquiry_date: string
+          gender: string | null
+          id: string
+          mobile_no: string
+          nationality: string | null
+          nearby_road_name: string | null
+          parents_name: string
+          referred_by: string | null
+          religion: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          age?: number | null
+          child_name: string
+          course_name?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          enquiry_date?: string
+          gender?: string | null
+          id?: string
+          mobile_no: string
+          nationality?: string | null
+          nearby_road_name?: string | null
+          parents_name: string
+          referred_by?: string | null
+          religion?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          age?: number | null
+          child_name?: string
+          course_name?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          enquiry_date?: string
+          gender?: string | null
+          id?: string
+          mobile_no?: string
+          nationality?: string | null
+          nearby_road_name?: string | null
+          parents_name?: string
+          referred_by?: string | null
+          religion?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admission_followups: {
+        Row: {
+          created_at: string
+          enquiry_id: string
+          followup_date: string
+          followup_type: string
+          id: string
+          next_followup_date: string | null
+          remark: string | null
+        }
+        Insert: {
+          created_at?: string
+          enquiry_id: string
+          followup_date?: string
+          followup_type: string
+          id?: string
+          next_followup_date?: string | null
+          remark?: string | null
+        }
+        Update: {
+          created_at?: string
+          enquiry_id?: string
+          followup_date?: string
+          followup_type?: string
+          id?: string
+          next_followup_date?: string | null
+          remark?: string | null
+        }
+        Relationships: []
+      }
+      advance_payment_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          mahajan_id: string
+          notes: string | null
+          payment_date: string
+          payment_mode: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          mahajan_id: string
+          notes?: string | null
+          payment_date?: string
+          payment_mode?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          mahajan_id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_mode?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_payment_transactions_mahajan_id_fkey"
+            columns: ["mahajan_id"]
+            isOneToOne: false
+            referencedRelation: "mahajans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -174,6 +311,122 @@ export type Database = {
           },
         ]
       }
+      cheque_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          cheque_id: string
+          created_at: string
+          id: string
+          new_status: Database["public"]["Enums"]["cheque_status"]
+          notes: string | null
+          old_status: Database["public"]["Enums"]["cheque_status"] | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          cheque_id: string
+          created_at?: string
+          id?: string
+          new_status: Database["public"]["Enums"]["cheque_status"]
+          notes?: string | null
+          old_status?: Database["public"]["Enums"]["cheque_status"] | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          cheque_id?: string
+          created_at?: string
+          id?: string
+          new_status?: Database["public"]["Enums"]["cheque_status"]
+          notes?: string | null
+          old_status?: Database["public"]["Enums"]["cheque_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cheque_status_history_cheque_id_fkey"
+            columns: ["cheque_id"]
+            isOneToOne: false
+            referencedRelation: "cheques"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cheques: {
+        Row: {
+          amount: number
+          bank_name: string
+          bank_transaction_id: string | null
+          bounce_charges: number | null
+          cheque_date: string
+          cheque_number: string
+          cleared_date: string | null
+          created_at: string
+          firm_account_id: string | null
+          id: string
+          mahajan_id: string | null
+          notes: string | null
+          party_name: string | null
+          status: Database["public"]["Enums"]["cheque_status"]
+          type: Database["public"]["Enums"]["cheque_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bank_name: string
+          bank_transaction_id?: string | null
+          bounce_charges?: number | null
+          cheque_date?: string
+          cheque_number: string
+          cleared_date?: string | null
+          created_at?: string
+          firm_account_id?: string | null
+          id?: string
+          mahajan_id?: string | null
+          notes?: string | null
+          party_name?: string | null
+          status?: Database["public"]["Enums"]["cheque_status"]
+          type: Database["public"]["Enums"]["cheque_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bank_name?: string
+          bank_transaction_id?: string | null
+          bounce_charges?: number | null
+          cheque_date?: string
+          cheque_number?: string
+          cleared_date?: string | null
+          created_at?: string
+          firm_account_id?: string | null
+          id?: string
+          mahajan_id?: string | null
+          notes?: string | null
+          party_name?: string | null
+          status?: Database["public"]["Enums"]["cheque_status"]
+          type?: Database["public"]["Enums"]["cheque_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cheques_firm_account_id_fkey"
+            columns: ["firm_account_id"]
+            isOneToOne: false
+            referencedRelation: "firm_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cheques_mahajan_id_fkey"
+            columns: ["mahajan_id"]
+            isOneToOne: false
+            referencedRelation: "mahajans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_transaction_types: {
         Row: {
           created_at: string
@@ -201,6 +454,7 @@ export type Database = {
           created_at: string
           daily_amount: number | null
           id: string
+          locked: boolean | null
           name: string
           outstanding_amount: number | null
           payment_day: string | null
@@ -213,6 +467,7 @@ export type Database = {
           created_at?: string
           daily_amount?: number | null
           id?: string
+          locked?: boolean | null
           name: string
           outstanding_amount?: number | null
           payment_day?: string | null
@@ -225,6 +480,7 @@ export type Database = {
           created_at?: string
           daily_amount?: number | null
           id?: string
+          locked?: boolean | null
           name?: string
           outstanding_amount?: number | null
           payment_day?: string | null
@@ -474,6 +730,7 @@ export type Database = {
           is_active: boolean | null
           loan_date: string
           loan_number: string | null
+          locked: boolean | null
           principal_amount: number
           processing_fee: number | null
           total_outstanding: number | null
@@ -493,6 +750,7 @@ export type Database = {
           is_active?: boolean | null
           loan_date?: string
           loan_number?: string | null
+          locked?: boolean | null
           principal_amount: number
           processing_fee?: number | null
           total_outstanding?: number | null
@@ -512,6 +770,7 @@ export type Database = {
           is_active?: boolean | null
           loan_date?: string
           loan_number?: string | null
+          locked?: boolean | null
           principal_amount?: number
           processing_fee?: number | null
           total_outstanding?: number | null
@@ -559,6 +818,45 @@ export type Database = {
           name?: string
           payment_day?: string | null
           phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          notes: string | null
+          order_date: string
+          order_number: string | null
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          order_number?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          order_number?: string | null
+          status?: string
+          title?: string
           updated_at?: string
           user_id?: string
         }
@@ -839,6 +1137,7 @@ export type Database = {
     Functions: {
       generate_bill_number: { Args: never; Returns: string }
       generate_loan_number: { Args: never; Returns: string }
+      generate_order_number: { Args: never; Returns: string }
       generate_sale_number: { Args: never; Returns: string }
       get_all_users_for_admin: {
         Args: never
@@ -856,6 +1155,8 @@ export type Database = {
       }
     }
     Enums: {
+      cheque_status: "pending" | "processing" | "cleared" | "bounced"
+      cheque_type: "received" | "issued"
       payment_method: "cash" | "bank"
     }
     CompositeTypes: {
@@ -984,6 +1285,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      cheque_status: ["pending", "processing", "cleared", "bounced"],
+      cheque_type: ["received", "issued"],
       payment_method: ["cash", "bank"],
     },
   },
