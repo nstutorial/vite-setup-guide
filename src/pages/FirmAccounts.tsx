@@ -263,9 +263,6 @@ export default function FirmAccounts() {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SidebarTrigger>
-                <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
                 <h1 className="text-3xl font-bold">Firm Accounts</h1>
               </div>
               <div className="flex gap-2">
