@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Eye, EyeOff, ArrowLeft, FileText, ArrowRightLeft, ChevronUp, ChevronDown, Menu } from 'lucide-react';
+import { Plus, Eye, EyeOff, ArrowLeft, FileText, ArrowRightLeft, ChevronUp, ChevronDown, Menu, Banknote } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AddFirmAccountDialog } from '@/components/AddFirmAccountDialog';
 import { TransferBetweenAccountsDialog } from '@/components/TransferBetweenAccountsDialog';
+import { AddChequeDialog } from '@/components/AddChequeDialog';
 import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -31,6 +32,7 @@ export default function FirmAccounts() {
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showReceiveChequeDialog, setShowReceiveChequeDialog] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<{ id: string; name: string } | null>(null);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('active');
@@ -51,7 +53,7 @@ export default function FirmAccounts() {
 
       // Calculate current_balance from transaction history for each account
       const accountsWithCalculatedBalance = await Promise.all(
-        (data || []).map(async (account) => {
+        (data || []).map(async (account, idx) => {
           const { data: txns } = await supabase
             .from('firm_transactions')
             .select('amount, transaction_type')
@@ -69,7 +71,7 @@ export default function FirmAccounts() {
           return {
             ...account,
             current_balance: calculatedBalance,
-            display_order: account.display_order || 0
+            display_order: account.display_order ?? idx
           };
         })
       );
@@ -114,18 +116,27 @@ export default function FirmAccounts() {
     const swapAccount = filteredAccounts[newIndex];
     const currentAccount = filteredAccounts[currentIndex];
 
+    // Use distinct order values based on index positions
+    const currentNewOrder = newIndex;
+    const swapNewOrder = currentIndex;
+
     try {
-      // Swap display_order values
-      await supabase
+      // Update both accounts with new order values
+      const { error: error1 } = await supabase
         .from('firm_accounts')
-        .update({ display_order: swapAccount.display_order })
+        .update({ display_order: currentNewOrder })
         .eq('id', currentAccount.id);
 
-      await supabase
+      if (error1) throw error1;
+
+      const { error: error2 } = await supabase
         .from('firm_accounts')
-        .update({ display_order: currentAccount.display_order })
+        .update({ display_order: swapNewOrder })
         .eq('id', swapAccount.id);
 
+      if (error2) throw error2;
+
+      toast.success('Account order updated');
       fetchAccounts();
     } catch (error) {
       console.error('Error reordering accounts:', error);
@@ -257,10 +268,16 @@ export default function FirmAccounts() {
                 </Button>
                 <h1 className="text-3xl font-bold">Firm Accounts</h1>
               </div>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Account
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowReceiveChequeDialog(true)}>
+                  <Banknote className="h-4 w-4 mr-2" />
+                  Receive Money
+                </Button>
+                <Button onClick={() => setShowAddDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Account
+                </Button>
+              </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -321,6 +338,13 @@ export default function FirmAccounts() {
                 onTransferComplete={fetchAccounts}
               />
             )}
+
+            <AddChequeDialog
+              open={showReceiveChequeDialog}
+              onOpenChange={setShowReceiveChequeDialog}
+              type="received"
+              onSuccess={fetchAccounts}
+            />
 
             <SettingsDialog
               open={showSettingsDialog}
